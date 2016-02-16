@@ -17,8 +17,6 @@ import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
 import org.openhab.binding.heatmiser.HeatmiserBindingProvider;
-import org.openhab.binding.heatmiser.internal.thermostat.HeatmiserPRT;
-import org.openhab.binding.heatmiser.internal.thermostat.HeatmiserPRTHW;
 import org.openhab.binding.heatmiser.internal.thermostat.HeatmiserThermostat;
 import org.openhab.binding.heatmiser.internal.thermostat.HeatmiserThermostat.Functions;
 import org.openhab.core.binding.AbstractActiveBinding;
@@ -48,6 +46,7 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
     private String ipAddress;
     private int ipPort;
     private final int DefaultPort = 1024;
+    private int protocolVersion;
 
     // Polling and receiving are separated so that we can automatically detect the type of thermostat via the receive
     // packet.
@@ -83,7 +82,7 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
     private void listen() {
         stopListening();
 
-        connector = new HeatmiserConnector();
+        connector = new HeatmiserConnector(protocolVersion);
         if (connector != null) {
             // Initialise the IP connection
             connector.addEventListener(eventListener);
@@ -157,10 +156,9 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
         }
 
         int pollAddress = pollIterator.next();
-        HeatmiserThermostat pollThermostat = new HeatmiserThermostat();
+        HeatmiserThermostat pollThermostat = HeatmiserThermostat.getNewHeatmiserThermostat(protocolVersion);
         logger.debug("HEATMISER: polling {}", pollAddress);
         pollThermostat.setAddress((byte) pollAddress);
-
         if (pollIterator.hasNext() == false) {
             pollIterator = null;
         }
@@ -243,6 +241,13 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
                 ipPort = DefaultPort;
             }
 
+            String protocolConfig = (String) config.get("protocol");
+            if (StringUtils.isNotBlank(protocolConfig)) {
+                protocolVersion = Integer.parseInt(protocolConfig);
+            } else {
+                protocolVersion = 3;
+            }
+
             // start the listener
             listen();
 
@@ -258,8 +263,8 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
         HeatmiserThermostat thermostatPacket = null;
 
         @Override
-        public void packetReceived(EventObject event, byte[] packet) {
-            thermostatPacket = new HeatmiserThermostat();
+        public void packetReceived(EventObject event, int version, byte[] packet) {
+            thermostatPacket = HeatmiserThermostat.getNewHeatmiserThermostat(version);
             if (thermostatPacket.setData(packet) == false) {
                 return;
             }
@@ -276,19 +281,7 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
             // Thermostat not found in the list of known devices
             // Create a new thermostat and add it to the array
             HeatmiserThermostat newThermostat = null;
-            switch (thermostatPacket.getModel()) {
-                case PRT:
-                case PRTE:
-                    newThermostat = new HeatmiserPRT();
-                    break;
-                case PRTHW:
-                    newThermostat = new HeatmiserPRTHW();
-                    break;
-                default:
-                    logger.error("Unknown heatmiser thermostat type {} at address {}", thermostatPacket.getModel(),
-                            thermostatPacket.getAddress());
-                    break;
-            }
+            newThermostat = HeatmiserThermostat.getNewHeatmiserThermostat(version, thermostatPacket.getType());
 
             // Add the new thermostat to the list
             if (newThermostat != null) {
@@ -337,10 +330,16 @@ public class HeatmiserBinding extends AbstractActiveBinding<HeatmiserBindingProv
                             state = thermostat.getHoldTime(provider.getItemType(itemName));
                             break;
                         case HOLDMODE:
-                            state = thermostat.getHoldTime(provider.getItemType(itemName));
+                            state = thermostat.getHoldMode(provider.getItemType(itemName));
                             break;
                         case STATE:
                             state = thermostat.getState(provider.getItemType(itemName));
+                            break;
+                        case TIME:
+                            state = thermostat.getTime(provider.getItemType(itemName));
+                            break;
+                        case LOCK:
+                            state = thermostat.getLockState(provider.getItemType(itemName));
                             break;
                         default:
                             break;

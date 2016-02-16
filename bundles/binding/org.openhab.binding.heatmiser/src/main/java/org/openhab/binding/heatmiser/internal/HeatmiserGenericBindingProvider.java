@@ -96,6 +96,12 @@ public class HeatmiserGenericBindingProvider extends AbstractGenericBindingProvi
                             config = null;
                         }
                         break;
+                    case TIME:
+                        if (config.itemType != DateTimeItem.class) {
+                            logger.error("Only DateTime allowed for Heatmiser:{} function", config.function);
+                            config = null;
+                        }
+                        break;
                     case HOLIDAYSET:
                         if (config.itemType != SwitchItem.class && config.itemType != NumberItem.class) {
                             logger.error("Only Switch and Number allowed for Heatmiser:{} function", config.function);
@@ -113,6 +119,7 @@ public class HeatmiserGenericBindingProvider extends AbstractGenericBindingProvi
                     case HEATSTATE:
                     case STATE:
                     case ONOFF:
+                    case LOCK:
                         if (config.itemType != SwitchItem.class && config.itemType != StringItem.class) {
                             logger.error("Only Switch and String allowed for Heatmiser:{} function", config.function);
                             config = null;
